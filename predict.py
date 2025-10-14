@@ -1,23 +1,6 @@
 # Supabase 클라이언트 설정
-# 양쪽 환경 지원: Colab/Jupyter와 로컬 Python 모두 호환
-import sys
-import subprocess
-
-# 실행 환경 자동 감지
-try:
-    import google.colab
-    IN_COLAB = True
-except ImportError:
-    IN_COLAB = False
-
-# 필요한 패키지 자동 설치
-try:
-    from supabase import create_client, Client
-except ImportError:
-    print("supabase 패키지를 설치 중...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "supabase"])
-    from supabase import create_client, Client
-    
+!pip install supabase
+from supabase import create_client, Client
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
@@ -34,8 +17,8 @@ import json
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 # Supabase 연결 설정
-url: str = ""
-key: str = ""
+url: str = "https://rncibvlsfgctdvxwavfh.supabase.co"
+key: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJuY2lidmxzZmdjdGR2eHdhdmZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMzg2ODksImV4cCI6MjA3NTYxNDY4OX0.dwb0Pl2-3J36GSK9oF1sAgY26ggjqCwIXsVERQDpze8"
 supabase: Client = create_client(url, key)
 
 # Supabase에서 데이터 가져오기
