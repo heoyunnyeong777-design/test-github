@@ -17,8 +17,8 @@ import json
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 # Supabase 연결 설정
-url: str = "https://rncibvlsfgctdvxwavfh.supabase.co"
-key: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJuY2lidmxzZmdjdGR2eHdhdmZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMzg2ODksImV4cCI6MjA3NTYxNDY4OX0.dwb0Pl2-3J36GSK9oF1sAgY26ggjqCwIXsVERQDpze8"
+url: str = ""
+key: str = ""
 supabase: Client = create_client(url, key)
 
 # Supabase에서 데이터 가져오기

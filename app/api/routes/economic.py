@@ -1,6 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
 from app.schemas.stock import UpdateResponse
-from app.services.economic_service import update_economic_data_in_background
+from app.utils.scheduler import run_economic_data_update_now
 from datetime import date, datetime
 
 router = APIRouter()
@@ -18,11 +18,11 @@ async def update_economic_data(
     """
     try:
         # 백그라운드 작업으로 경제 데이터 업데이트 실행
-        background_tasks.add_task(update_economic_data_in_background)
+        background_tasks.add_task(run_economic_data_update_now)
         
         return {
             "success": True,
-            "message": "경제 데이터 업데이트 기능이 활성화되었습니다.",
+            "message": "경제 데이터 업데이트가 백그라운드에서 시작되었습니다.",
             "total_records": 0,
             "updated_records": 0
         }

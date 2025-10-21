@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from app.services.stock_recommendation_service import StockRecommendationService
-# from app.utils.scheduler import run_auto_buy_now, start_scheduler, stop_scheduler, stock_scheduler, run_auto_sell_now, start_sell_scheduler, stop_sell_scheduler, get_scheduler_status
+from app.utils.scheduler import run_auto_buy_now, start_scheduler, stop_scheduler, stock_scheduler, run_auto_sell_now, start_sell_scheduler, stop_sell_scheduler, get_scheduler_status
 
 router = APIRouter()
 service = StockRecommendationService()
@@ -136,154 +136,154 @@ async def get_sell_candidates():
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"매도 대상 종목 조회 중 오류 발생: {str(e)}")
 
-# @router.post("/purchase/trigger", response_model=dict)
-# async def trigger_auto_purchase():
-#     """
-#     자동 매수 프로세스를 수동으로 트리거합니다. (테스트 및 즉시 실행용)
-#     
-#     이 API는 스케줄러에 설정된 자동 매수 로직을 즉시 실행합니다.
-#     - 매수 대상: get_combined_recommendations_with_technical_and_sentiment() 함수 호출하여 종목 추출
-#     - 해당 종목에 대해 한국투자증권 API를 통해 현재가 조회 및 매수 주문
-#     
-#     응답은 매수 프로세스가 트리거되었다는 메시지만 반환하며, 실제 처리 결과는 서버 로그에서 확인할 수 있습니다.
-#     """
-#     try:
-#         run_auto_buy_now()
-#         return {"message": "자동 매수 프로세스가 트리거되었습니다. 로그를 확인하세요."}
-#     except Exception as e:
-#         print(f"자동 매수 트리거 중 오류 발생: {str(e)}")
-#         import traceback
-#         print(traceback.format_exc())
-#         raise HTTPException(status_code=500, detail=f"자동 매수 트리거 중 오류 발생: {str(e)}")
+@router.post("/purchase/trigger", response_model=dict)
+async def trigger_auto_purchase():
+    """
+    자동 매수 프로세스를 수동으로 트리거합니다. (테스트 및 즉시 실행용)
+    
+    이 API는 스케줄러에 설정된 자동 매수 로직을 즉시 실행합니다.
+    - 매수 대상: get_combined_recommendations_with_technical_and_sentiment() 함수 호출하여 종목 추출
+    - 해당 종목에 대해 한국투자증권 API를 통해 현재가 조회 및 매수 주문
+    
+    응답은 매수 프로세스가 트리거되었다는 메시지만 반환하며, 실제 처리 결과는 서버 로그에서 확인할 수 있습니다.
+    """
+    try:
+        run_auto_buy_now()
+        return {"message": "자동 매수 프로세스가 트리거되었습니다. 로그를 확인하세요."}
+    except Exception as e:
+        print(f"자동 매수 트리거 중 오류 발생: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"자동 매수 트리거 중 오류 발생: {str(e)}")
 
-# @router.post("/purchase/scheduler/start", response_model=dict)
-# async def start_auto_purchase_scheduler():
-#     """
-#     자동 매수 스케줄러를 시작합니다.
-#     
-#     스케줄러는 한국 시간 기준 매일 밤 12시(00:00)에 자동 매수 프로세스를 실행합니다.
-#     이미 실행 중인 경우 메시지만 반환합니다.
-#     """
-#     try:
-#         result = start_scheduler()
-#         if result:
-#             return {"message": "자동 매수 스케줄러가 시작되었습니다. 매일 밤 12시에 자동 매수가 실행됩니다."}
-#         else:
-#             return {"message": "자동 매수 스케줄러가 이미 실행 중입니다."}
-#     except Exception as e:
-#         print(f"스케줄러 시작 중 오류 발생: {str(e)}")
-#         import traceback
-#         print(traceback.format_exc())
-#         raise HTTPException(status_code=500, detail=f"스케줄러 시작 중 오류 발생: {str(e)}")
+@router.post("/purchase/scheduler/start", response_model=dict)
+async def start_auto_purchase_scheduler():
+    """
+    자동 매수 스케줄러를 시작합니다.
+    
+    스케줄러는 한국 시간 기준 매일 밤 12시(00:00)에 자동 매수 프로세스를 실행합니다.
+    이미 실행 중인 경우 메시지만 반환합니다.
+    """
+    try:
+        result = start_scheduler()
+        if result:
+            return {"message": "자동 매수 스케줄러가 시작되었습니다. 매일 밤 12시에 자동 매수가 실행됩니다."}
+        else:
+            return {"message": "자동 매수 스케줄러가 이미 실행 중입니다."}
+    except Exception as e:
+        print(f"스케줄러 시작 중 오류 발생: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"스케줄러 시작 중 오류 발생: {str(e)}")
 
-# @router.post("/purchase/scheduler/stop", response_model=dict)
-# async def stop_auto_purchase_scheduler():
-#     """
-#     자동 매수 스케줄러를 중지합니다.
-#     
-#     중지 후에는 더 이상 자동 매수가 실행되지 않습니다.
-#     다시 시작하려면 /purchase/scheduler/start API를 호출해야 합니다.
-#     이미 중지된 경우 메시지만 반환합니다.
-#     """
-#     try:
-#         result = stop_scheduler()
-#         if result:
-#             return {"message": "자동 매수 스케줄러가 중지되었습니다."}
-#         else:
-#             return {"message": "자동 매수 스케줄러가 이미 중지되었습니다."}
-#     except Exception as e:
-#         print(f"스케줄러 중지 중 오류 발생: {str(e)}")
-#         import traceback
-#         print(traceback.format_exc())
-#         raise HTTPException(status_code=500, detail=f"스케줄러 중지 중 오류 발생: {str(e)}")
+@router.post("/purchase/scheduler/stop", response_model=dict)
+async def stop_auto_purchase_scheduler():
+    """
+    자동 매수 스케줄러를 중지합니다.
+    
+    중지 후에는 더 이상 자동 매수가 실행되지 않습니다.
+    다시 시작하려면 /purchase/scheduler/start API를 호출해야 합니다.
+    이미 중지된 경우 메시지만 반환합니다.
+    """
+    try:
+        result = stop_scheduler()
+        if result:
+            return {"message": "자동 매수 스케줄러가 중지되었습니다."}
+        else:
+            return {"message": "자동 매수 스케줄러가 이미 중지되었습니다."}
+    except Exception as e:
+        print(f"스케줄러 중지 중 오류 발생: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"스케줄러 중지 중 오류 발생: {str(e)}")
 
-# @router.get("/scheduler/status", response_model=dict)
-# async def get_scheduler_status():
-#     """
-#     자동 매수/매도 스케줄러의 현재 상태를 반환합니다.
-#     
-#     반환값:
-#     - buy_running: 매수 스케줄러 실행 중 여부 (true/false)
-#     - sell_running: 매도 스케줄러 실행 중 여부 (true/false)
-#     """
-#     try:
-#         # 스케줄러 인스턴스에서 직접 상태 가져오기
-#         buy_running = stock_scheduler.running
-#         sell_running = stock_scheduler.sell_running
-#         
-#         return {
-#             "buy_running": buy_running,
-#             "sell_running": sell_running,
-#             "message": f"매수 스케줄러: {'실행 중' if buy_running else '중지됨'}, 매도 스케줄러: {'실행 중' if sell_running else '중지됨'}"
-#         }
-#     except Exception as e:
-#         print(f"스케줄러 상태 확인 중 오류 발생: {str(e)}")
-#         import traceback
-#         print(traceback.format_exc())
-#         raise HTTPException(status_code=500, detail=f"스케줄러 상태 확인 중 오류 발생: {str(e)}")
+@router.get("/scheduler/status", response_model=dict)
+async def get_scheduler_status():
+    """
+    자동 매수/매도 스케줄러의 현재 상태를 반환합니다.
+    
+    반환값:
+    - buy_running: 매수 스케줄러 실행 중 여부 (true/false)
+    - sell_running: 매도 스케줄러 실행 중 여부 (true/false)
+    """
+    try:
+        # 스케줄러 인스턴스에서 직접 상태 가져오기
+        buy_running = stock_scheduler.running
+        sell_running = stock_scheduler.sell_running
+        
+        return {
+            "buy_running": buy_running,
+            "sell_running": sell_running,
+            "message": f"매수 스케줄러: {'실행 중' if buy_running else '중지됨'}, 매도 스케줄러: {'실행 중' if sell_running else '중지됨'}"
+        }
+    except Exception as e:
+        print(f"스케줄러 상태 확인 중 오류 발생: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"스케줄러 상태 확인 중 오류 발생: {str(e)}")
 
-# @router.post("/sell/trigger", response_model=dict)
-# async def trigger_auto_sell():
-#     """
-#     자동 매도 프로세스를 수동으로 트리거합니다. (테스트 및 즉시 실행용)
-#     
-#     이 API는 매도 스케줄러에 설정된 자동 매도 로직을 즉시 실행합니다.
-#     - 매도 대상: get_stocks_to_sell() 함수 호출하여 종목 추출
-#     - 해당 종목에 대해 한국투자증권 API를 통해 현재가 조회 및 매도 주문
-#     
-#     응답은 매도 프로세스가 트리거되었다는 메시지만 반환하며, 실제 처리 결과는 서버 로그에서 확인할 수 있습니다.
-#     """
-#     try:
-#         run_auto_sell_now()
-#         return {"message": "자동 매도 프로세스가 트리거되었습니다. 로그를 확인하세요."}
-#     except Exception as e:
-#         print(f"자동 매도 트리거 중 오류 발생: {str(e)}")
-#         import traceback
-#         print(traceback.format_exc())
-#         raise HTTPException(status_code=500, detail=f"자동 매도 트리거 중 오류 발생: {str(e)}")
+@router.post("/sell/trigger", response_model=dict)
+async def trigger_auto_sell():
+    """
+    자동 매도 프로세스를 수동으로 트리거합니다. (테스트 및 즉시 실행용)
+    
+    이 API는 매도 스케줄러에 설정된 자동 매도 로직을 즉시 실행합니다.
+    - 매도 대상: get_stocks_to_sell() 함수 호출하여 종목 추출
+    - 해당 종목에 대해 한국투자증권 API를 통해 현재가 조회 및 매도 주문
+    
+    응답은 매도 프로세스가 트리거되었다는 메시지만 반환하며, 실제 처리 결과는 서버 로그에서 확인할 수 있습니다.
+    """
+    try:
+        run_auto_sell_now()
+        return {"message": "자동 매도 프로세스가 트리거되었습니다. 로그를 확인하세요."}
+    except Exception as e:
+        print(f"자동 매도 트리거 중 오류 발생: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"자동 매도 트리거 중 오류 발생: {str(e)}")
 
-# @router.post("/sell/scheduler/start", response_model=dict)
-# async def start_auto_sell_scheduler():
-#     """
-#     자동 매도 스케줄러를 시작합니다.
-#     
-#     스케줄러는 1분마다 매도 대상을 확인하고 조건을 만족하는 종목에 대해 자동 매도 주문을 실행합니다.
-#     매도 조건:
-#     1. 구매가 대비 현재가가 +5% 이상(익절) 또는 -5% 이하(손절)인 종목
-#     2. 감성 점수 < -0.15이고 기술적 지표 중 2개 이상 매도 신호인 종목
-#     3. 기술적 지표 중 3개 이상 매도 신호인 종목
-#     
-#     이미 실행 중인 경우 메시지만 반환합니다.
-#     """
-#     try:
-#         result = start_sell_scheduler()
-#         if result:
-#             return {"message": "자동 매도 스케줄러가 시작되었습니다. 1분마다 매도 대상을 확인합니다."}
-#         else:
-#             return {"message": "자동 매도 스케줄러가 이미 실행 중입니다."}
-#     except Exception as e:
-#         print(f"매도 스케줄러 시작 중 오류 발생: {str(e)}")
-#         import traceback
-#         print(traceback.format_exc())
-#         raise HTTPException(status_code=500, detail=f"매도 스케줄러 시작 중 오류 발생: {str(e)}")
+@router.post("/sell/scheduler/start", response_model=dict)
+async def start_auto_sell_scheduler():
+    """
+    자동 매도 스케줄러를 시작합니다.
+    
+    스케줄러는 1분마다 매도 대상을 확인하고 조건을 만족하는 종목에 대해 자동 매도 주문을 실행합니다.
+    매도 조건:
+    1. 구매가 대비 현재가가 +5% 이상(익절) 또는 -5% 이하(손절)인 종목
+    2. 감성 점수 < -0.15이고 기술적 지표 중 2개 이상 매도 신호인 종목
+    3. 기술적 지표 중 3개 이상 매도 신호인 종목
+    
+    이미 실행 중인 경우 메시지만 반환합니다.
+    """
+    try:
+        result = start_sell_scheduler()
+        if result:
+            return {"message": "자동 매도 스케줄러가 시작되었습니다. 1분마다 매도 대상을 확인합니다."}
+        else:
+            return {"message": "자동 매도 스케줄러가 이미 실행 중입니다."}
+    except Exception as e:
+        print(f"매도 스케줄러 시작 중 오류 발생: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"매도 스케줄러 시작 중 오류 발생: {str(e)}")
 
-# @router.post("/sell/scheduler/stop", response_model=dict)
-# async def stop_auto_sell_scheduler():
-#     """
-#     자동 매도 스케줄러를 중지합니다.
-#     
-#     중지 후에는 더 이상 자동 매도가 실행되지 않습니다.
-#     다시 시작하려면 /sell/scheduler/start API를 호출해야 합니다.
-#     이미 중지된 경우 메시지만 반환합니다.
-#     """
-#     try:
-#         result = stop_sell_scheduler()
-#         if result:
-#             return {"message": "자동 매도 스케줄러가 중지되었습니다."}
-#         else:
-#             return {"message": "자동 매도 스케줄러가 이미 중지되었습니다."}
-#     except Exception as e:
-#         print(f"매도 스케줄러 중지 중 오류 발생: {str(e)}")
-#         import traceback
-#         print(traceback.format_exc())
-#         raise HTTPException(status_code=500, detail=f"매도 스케줄러 중지 중 오류 발생: {str(e)}")
+@router.post("/sell/scheduler/stop", response_model=dict)
+async def stop_auto_sell_scheduler():
+    """
+    자동 매도 스케줄러를 중지합니다.
+    
+    중지 후에는 더 이상 자동 매도가 실행되지 않습니다.
+    다시 시작하려면 /sell/scheduler/start API를 호출해야 합니다.
+    이미 중지된 경우 메시지만 반환합니다.
+    """
+    try:
+        result = stop_sell_scheduler()
+        if result:
+            return {"message": "자동 매도 스케줄러가 중지되었습니다."}
+        else:
+            return {"message": "자동 매도 스케줄러가 이미 중지되었습니다."}
+    except Exception as e:
+        print(f"매도 스케줄러 중지 중 오류 발생: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"매도 스케줄러 중지 중 오류 발생: {str(e)}")
