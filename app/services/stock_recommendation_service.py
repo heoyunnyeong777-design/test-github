@@ -440,7 +440,7 @@ class StockRecommendationService:
                 tech_conditions = [item["golden_cross"], item["rsi"] < 50, item["macd_buy_signal"]]
                 
                 if sentiment_score is not None and sentiment_score >= 0.15:
-                    if sum(tech_conditions) >= 2:
+                    if sum(tech_conditions) >= 1:
                         final_results.append(item)
                 else:
                     if sum(tech_conditions) >= 3:

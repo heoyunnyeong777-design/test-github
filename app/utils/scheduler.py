@@ -112,27 +112,67 @@ class StockScheduler:
             schedule.run_pending()
             time.sleep(1)
     
-    def _run_auto_buy(self):
-        """자동 매수 실행 함수 - 스케줄링된 시간에 실행됨"""
-        try:
-            logger.info("자동 매수 작업 시작")
-            asyncio.run(self._execute_auto_buy())
-            logger.info("자동 매수 작업 완료")
-            return True
-        except Exception as e:
-            logger.error(f"자동 매수 작업 중 오류 발생: {str(e)}", exc_info=True)
-            return False
+    def _run_auto_buy(self, wait_for_completion=False):
+        """자동 매수 실행 함수 - 스케줄링된 시간에 실행됨
+        
+        Args:
+            wait_for_completion: True면 완료될 때까지 대기, False면 백그라운드 실행
+        """
+        def run_in_thread():
+            try:
+                logger.info("자동 매수 작업 시작")
+                # 완전히 새로운 스레드에서 이벤트 루프 생성
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self._execute_auto_buy())
+                finally:
+                    loop.close()
+                logger.info("자동 매수 작업 완료")
+            except Exception as e:
+                logger.error(f"자동 매수 작업 중 오류 발생: {str(e)}", exc_info=True)
+        
+        # 별도 스레드에서 실행
+        thread = threading.Thread(target=run_in_thread)
+        thread.daemon = True
+        thread.start()
+        
+        # 수동 실행 시에만 완료될 때까지 대기
+        if wait_for_completion:
+            thread.join()
+        
+        return True
     
-    def _run_auto_sell(self):
-        """자동 매도 실행 함수 - 1분마다 실행됨"""
-        try:
-            logger.info("자동 매도 작업 시작")
-            asyncio.run(self._execute_auto_sell())
-            logger.info("자동 매도 작업 완료")
-            return True
-        except Exception as e:
-            logger.error(f"자동 매도 작업 중 오류 발생: {str(e)}", exc_info=True)
-            return False
+    def _run_auto_sell(self, wait_for_completion=False):
+        """자동 매도 실행 함수 - 1분마다 실행됨
+        
+        Args:
+            wait_for_completion: True면 완료될 때까지 대기, False면 백그라운드 실행
+        """
+        def run_in_thread():
+            try:
+                logger.info("자동 매도 작업 시작")
+                # 완전히 새로운 스레드에서 이벤트 루프 생성
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self._execute_auto_sell())
+                finally:
+                    loop.close()
+                logger.info("자동 매도 작업 완료")
+            except Exception as e:
+                logger.error(f"자동 매도 작업 중 오류 발생: {str(e)}", exc_info=True)
+        
+        # 별도 스레드에서 실행
+        thread = threading.Thread(target=run_in_thread)
+        thread.daemon = True
+        thread.start()
+        
+        # 수동 실행 시에만 완료될 때까지 대기
+        if wait_for_completion:
+            thread.join()
+        
+        return True
     
     async def _execute_auto_sell(self):
         """자동 매도 실행 로직"""
@@ -400,29 +440,45 @@ def get_scheduler_status():
     }
 
 def run_auto_buy_now():
-    """즉시 매수 실행 함수 (테스트용)"""
-    stock_scheduler._run_auto_buy()
+    """즉시 매수 실행 함수 (테스트용) - 완료될 때까지 대기"""
+    stock_scheduler._run_auto_buy(wait_for_completion=True)
     
 def run_auto_sell_now():
-    """즉시 매도 실행 함수 (테스트용)"""
-    stock_scheduler._run_auto_sell()
+    """즉시 매도 실행 함수 (테스트용) - 완료될 때까지 대기"""
+    stock_scheduler._run_auto_sell(wait_for_completion=True)
 
 # 경제 데이터 스케줄러 관련 변수 및 함수
 economic_data_scheduler_running = False
 economic_data_scheduler_thread = None
 
-def _run_economic_data_update():
+def _run_economic_data_update(wait_for_completion=False):
     """경제 데이터 업데이트 실행 함수"""
-    try:
-        logger = logging.getLogger('economic_scheduler')
-        logger.info("경제 데이터 업데이트 작업 시작")
-        asyncio.run(update_economic_data_in_background())
-        logger.info("경제 데이터 업데이트 작업 완료")
-        return True
-    except Exception as e:
-        logger = logging.getLogger('economic_scheduler')
-        logger.error(f"경제 데이터 업데이트 작업 중 오류 발생: {str(e)}", exc_info=True)
-        return False
+    def run_in_thread():
+        try:
+            logger = logging.getLogger('economic_scheduler')
+            logger.info("경제 데이터 업데이트 작업 시작")
+            # 완전히 새로운 스레드에서 이벤트 루프 생성
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(update_economic_data_in_background())
+            finally:
+                loop.close()
+            logger.info("경제 데이터 업데이트 작업 완료")
+        except Exception as e:
+            logger = logging.getLogger('economic_scheduler')
+            logger.error(f"경제 데이터 업데이트 작업 중 오류 발생: {str(e)}", exc_info=True)
+    
+    # 별도 스레드에서 실행
+    thread = threading.Thread(target=run_in_thread)
+    thread.daemon = True
+    thread.start()
+    
+    # 수동 실행 시에만 완료될 때까지 대기
+    if wait_for_completion:
+        thread.join()
+    
+    return True
 
 def _run_economic_scheduler():
     """경제 데이터 스케줄러 백그라운드 실행 함수"""
@@ -477,5 +533,5 @@ def stop_economic_data_scheduler():
     return True
 
 def run_economic_data_update_now():
-    """즉시 경제 데이터 업데이트 실행 함수 (테스트용)"""
-    return _run_economic_data_update() 
+    """즉시 경제 데이터 업데이트 실행 함수 (테스트용) - 완료될 때까지 대기"""
+    return _run_economic_data_update(wait_for_completion=True) 
