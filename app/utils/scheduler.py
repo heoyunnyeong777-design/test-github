@@ -5,7 +5,7 @@ import pytz
 from datetime import datetime, timedelta
 import threading
 from app.services.stock_recommendation_service import StockRecommendationService
-from app.services.balance_service import get_current_price, order_overseas_stock, get_all_overseas_balances
+from app.services.balance_service import get_current_price, order_overseas_stock, get_all_overseas_balances, get_overseas_balance
 from app.core.config import settings
 import logging
 from app.services.economic_service import update_economic_data_in_background
@@ -29,6 +29,8 @@ class StockScheduler:
         self.running = False
         self.sell_running = False  # 매도 스케줄러 실행 상태
         self.scheduler_thread = None
+        self.buy_executing = False  # 매수 작업 실행 중 플래그
+        self.sell_executing = False  # 매도 작업 실행 중 플래그
     
     def start(self):
         """매수 스케줄러 시작"""
@@ -36,7 +38,13 @@ class StockScheduler:
             logger.warning("매수 스케줄러가 이미 실행 중입니다.")
             return False
         
-        # 한국 시간 기준 밤 12시(00:00)에 매수 작업 실행
+        # 기존 매수 스케줄 작업이 있다면 제거 (중복 방지)
+        buy_jobs = [job for job in schedule.jobs if job.job_func.__name__ == '_run_auto_buy']
+        for job in buy_jobs:
+            schedule.cancel_job(job)
+            logger.info("기존 매수 스케줄 작업을 제거했습니다.")
+        
+        # 한국 시간 기준 밤 12시 15분에 매수 작업 실행
         schedule.every().day.at("00:00").do(self._run_auto_buy)
         
         # 별도 스레드에서 스케줄러 실행
@@ -71,6 +79,12 @@ class StockScheduler:
         if self.sell_running:
             logger.warning("매도 스케줄러가 이미 실행 중입니다.")
             return False
+        
+        # 기존 매도 스케줄 작업이 있다면 제거 (중복 방지)
+        sell_jobs = [job for job in schedule.jobs if job.job_func.__name__ == '_run_auto_sell']
+        for job in sell_jobs:
+            schedule.cancel_job(job)
+            logger.info("기존 매도 스케줄 작업을 제거했습니다.")
         
         # 1분마다 매도 작업 실행
         schedule.every(1).minutes.do(self._run_auto_sell)
@@ -118,6 +132,13 @@ class StockScheduler:
         Args:
             wait_for_completion: True면 완료될 때까지 대기, False면 백그라운드 실행
         """
+        # 이미 실행 중이면 중복 실행 방지
+        if self.buy_executing:
+            logger.warning("자동 매수 작업이 이미 실행 중입니다. 중복 실행을 건너뜁니다.")
+            return False
+        
+        self.buy_executing = True
+        
         def run_in_thread():
             try:
                 logger.info("자동 매수 작업 시작")
@@ -131,6 +152,8 @@ class StockScheduler:
                 logger.info("자동 매수 작업 완료")
             except Exception as e:
                 logger.error(f"자동 매수 작업 중 오류 발생: {str(e)}", exc_info=True)
+            finally:
+                self.buy_executing = False  # 작업 완료 후 플래그 해제
         
         # 별도 스레드에서 실행
         thread = threading.Thread(target=run_in_thread)
@@ -149,6 +172,13 @@ class StockScheduler:
         Args:
             wait_for_completion: True면 완료될 때까지 대기, False면 백그라운드 실행
         """
+        # 이미 실행 중이면 중복 실행 방지
+        if self.sell_executing:
+            logger.warning("자동 매도 작업이 이미 실행 중입니다. 중복 실행을 건너뜁니다.")
+            return False
+        
+        self.sell_executing = True
+        
         def run_in_thread():
             try:
                 logger.info("자동 매도 작업 시작")
@@ -162,6 +192,8 @@ class StockScheduler:
                 logger.info("자동 매도 작업 완료")
             except Exception as e:
                 logger.error(f"자동 매도 작업 중 오류 발생: {str(e)}", exc_info=True)
+            finally:
+                self.sell_executing = False  # 작업 완료 후 플래그 해제
         
         # 별도 스레드에서 실행
         thread = threading.Thread(target=run_in_thread)
@@ -298,7 +330,7 @@ class StockScheduler:
     
     async def _execute_auto_buy(self):
         """자동 매수 실행 로직"""
-        # 보유 종목 조회
+        # 보유 종목 조회 및 계좌 잔고 조회
         try:
             balance_result = get_all_overseas_balances()
             if balance_result.get("rt_cd") != "0":
@@ -315,6 +347,7 @@ class StockScheduler:
                     holding_tickers.add(ticker)
             
             logger.info(f"현재 보유 중인 종목 수: {len(holding_tickers)}")
+            
         except Exception as e:
             logger.error(f"보유 종목 조회 중 오류 발생: {str(e)}", exc_info=True)
             return
@@ -360,30 +393,63 @@ class StockScheduler:
                 if exchange_code == "NYSE":
                     api_exchange_code = "NYS"
                 
-                # 현재가 조회
+                # 현재가 조회 (재시도 로직 포함)
                 price_params = {
                     "AUTH": "",
                     "EXCD": api_exchange_code,  # 변환된 거래소 코드 사용
                     "SYMB": pure_ticker
                 }
                 
-                logger.info(f"{stock_name}({ticker}) 현재가 조회 요청. 거래소: {api_exchange_code}, 심볼: {pure_ticker}")
-                price_result = get_current_price(price_params)
+                price_query_retries = 3  # 최대 3번 재시도
+                price_query_count = 0
+                current_price = 0
                 
-                if price_result.get("rt_cd") != "0":
-                    logger.error(f"{stock_name}({ticker}) 현재가 조회 실패: {price_result.get('msg1', '알 수 없는 오류')}")
-                    continue
+                while price_query_count < price_query_retries and current_price <= 0:
+                    logger.info(f"{stock_name}({ticker}) 현재가 조회 요청 (시도 {price_query_count + 1}/{price_query_retries}). 거래소: {api_exchange_code}, 심볼: {pure_ticker}")
+                    price_result = get_current_price(price_params)
+                    
+                    if price_result.get("rt_cd") == "0":
+                        # 현재가 추출
+                        current_price = float(price_result.get("output", {}).get("last", 0))
+                        
+                        if current_price > 0:
+                            logger.info(f"{stock_name}({ticker}) 현재가 조회 성공: ${current_price}")
+                            break
+                        else:
+                            logger.error(f"{stock_name}({ticker}) 현재가가 유효하지 않습니다: {current_price}")
+                    else:
+                        error_msg = price_result.get('msg1', '알 수 없는 오류')
+                        logger.error(f"{stock_name}({ticker}) 현재가 조회 실패: {error_msg}")
+                        
+                        # API 속도 제한 오류인 경우
+                        if "초당" in error_msg:
+                            price_query_count += 1
+                            if price_query_count < price_query_retries:
+                                wait_time = 3 * price_query_count  # 3초, 6초, 9초
+                                logger.warning(f"초당 거래건수 초과. {wait_time}초 후 재시도 ({price_query_count}/{price_query_retries})")
+                                await asyncio.sleep(wait_time)
+                                continue  # 재시도
+                            else:
+                                logger.error(f"{stock_name}({ticker}) 현재가 조회 최대 재시도 횟수 초과")
+                                current_price = 0
+                                break
+                        else:
+                            # 속도 제한이 아닌 다른 오류는 재시도하지 않음
+                            current_price = 0
+                            break
+                    
+                    price_query_count += 1
                 
-                # 현재가 추출
-                current_price = float(price_result.get("output", {}).get("last", 0))
-                
+                # 현재가 조회 실패 시 다음 종목으로
                 if current_price <= 0:
-                    logger.error(f"{stock_name}({ticker}) 현재가가 유효하지 않습니다: {current_price}")
+                    logger.error(f"{stock_name}({ticker}) 현재가를 조회할 수 없어 건너뜁니다.")
+                    await asyncio.sleep(2)  # 2초 대기 후 다음 종목으로
                     continue
                 
-                # 매수 수량 계산 (종목당 계좌 잔고의 5%를 사용)
-                # 실제 환경에서는 계좌 잔고를 조회하는 로직을 추가해야 함
-                quantity = 1  # 기본값 설정
+                # 매수 수량을 3주로 고정
+                quantity = 3
+                
+                logger.info(f"{stock_name}({ticker}) 매수 계획: 현재가 ${current_price:.2f}, 수량 {quantity}주")
                 
                 # 매수 주문 실행
                 order_data = {
@@ -397,16 +463,56 @@ class StockScheduler:
                     "is_buy": True
                 }
                 
-                logger.info(f"{stock_name}({ticker}) 매수 주문 실행: 수량 {quantity}주, 가격 ${current_price}")
-                order_result = order_overseas_stock(order_data)
+                # 매수 주문 실행 (재시도 로직 포함)
+                max_retries = 3  # 최대 3번 재시도
+                retry_count = 0
+                order_success = False
                 
-                if order_result.get("rt_cd") == "0":
-                    logger.info(f"{stock_name}({ticker}) 매수 주문 성공: {order_result.get('msg1', '주문이 접수되었습니다.')}")
-                else:
-                    logger.error(f"{stock_name}({ticker}) 매수 주문 실패: {order_result.get('msg1', '알 수 없는 오류')}")
+                while retry_count < max_retries and not order_success:
+                    logger.info(f"{stock_name}({ticker}) 매수 주문 실행 (시도 {retry_count + 1}/{max_retries}): 수량 {quantity}주, 가격 ${current_price}")
+                    order_result = order_overseas_stock(order_data)
+                    
+                    if order_result.get("rt_cd") == "0":
+                        logger.info(f"{stock_name}({ticker}) 매수 주문 성공: {order_result.get('msg1', '주문이 접수되었습니다.')}")
+                        order_success = True
+                    else:
+                        error_msg = order_result.get('msg1', '알 수 없는 오류')
+                        logger.error(f"{stock_name}({ticker}) 매수 주문 실패: {error_msg}")
+                        
+                        # API 속도 제한 오류인 경우
+                        if "초당" in error_msg:
+                            retry_count += 1
+                            if retry_count < max_retries:
+                                wait_time = 5 * retry_count  # 대기 시간 점진적 증가 (5초, 10초, 15초)
+                                logger.warning(f"초당 거래건수 초과. {wait_time}초 후 재시도 ({retry_count}/{max_retries})")
+                                await asyncio.sleep(wait_time)
+                                # 현재가를 다시 조회하여 최신 가격으로 업데이트
+                                logger.info(f"{stock_name}({ticker}) 재시도를 위한 현재가 재조회 중...")
+                                retry_price_result = get_current_price(price_params)
+                                if retry_price_result.get("rt_cd") == "0":
+                                    retry_current_price = float(retry_price_result.get("output", {}).get("last", 0))
+                                    if retry_current_price > 0:
+                                        order_data["OVRS_ORD_UNPR"] = str(retry_current_price)
+                                        logger.info(f"{stock_name}({ticker}) 가격 업데이트: ${current_price} -> ${retry_current_price}")
+                                        current_price = retry_current_price
+                                    else:
+                                        logger.error(f"{stock_name}({ticker}) 재조회한 현재가가 유효하지 않습니다.")
+                                else:
+                                    logger.error(f"{stock_name}({ticker}) 현재가 재조회 실패")
+                                continue  # 재시도
+                            else:
+                                logger.error(f"{stock_name}({ticker}) 최대 재시도 횟수 초과. 다음 종목으로 이동합니다.")
+                                break  # 재시도 실패 시 다음 종목으로
+                        else:
+                            # 속도 제한이 아닌 다른 오류인 경우
+                            logger.error(f"{stock_name}({ticker}) 복구 불가능한 오류: {error_msg}")
+                            break  # 다른 오류는 재시도하지 않음
+                
+                if not order_success:
+                    logger.warning(f"{stock_name}({ticker}) 매수 주문 최종 실패. 다음 종목으로 이동합니다.")
                 
                 # 요청 간 지연 (API 요청 제한 방지)
-                await asyncio.sleep(1)
+                await asyncio.sleep(2)
                 
             except Exception as e:
                 logger.error(f"{candidate['stock_name']}({candidate['ticker']}) 매수 처리 중 오류: {str(e)}", exc_info=True)

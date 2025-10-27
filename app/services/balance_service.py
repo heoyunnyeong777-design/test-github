@@ -185,6 +185,13 @@ def get_overseas_balance(ovrs_excg_cd="NASD"):
     Args:
         ovrs_excg_cd (str, optional): 거래소 코드. Defaults to "NASD".
             NASD: 나스닥, NYSE: 뉴욕, AMEX: 아멕스
+    
+    Returns:
+        dict: {
+            "rt_cd": "0" 또는 "1",
+            "output1": [...] (보유 종목 리스트),
+            "output2": {...} (계좌 정보 - 잔고 포함)
+        }
     """
     # 토큰 가져오기
     access_token = get_access_token()
@@ -213,6 +220,8 @@ def get_overseas_balance(ovrs_excg_cd="NASD"):
         try:
             response = requests.get(url, headers=headers, params=params)
             result = response.json()
+            
+
             
             # API 응답에 오류가 있고, 재시도 가능한 경우
             if 'rt_cd' in result and result['rt_cd'] != '0' and attempt < max_retries - 1:
@@ -674,27 +683,38 @@ def order_overseas_stock(order_data):
         print(f"API 응답 상태 코드: {response.status_code}")
         print(f"API 응답 본문: {response.text[:200] if response.text else '비어있음'}")
         
-        # 응답 처리
-        if response.status_code != 200:
-            return {
-                "rt_cd": "1",
-                "msg_cd": f"HTTP_{response.status_code}",
-                "msg1": f"API 호출 실패: HTTP {response.status_code}",
-                "output": {}
-            }
-        
+        # 응답 처리 (HTTP 상태 코드가 200이 아니어도 JSON은 파싱 시도)
         try:
             result = response.json()
+            
+            # HTTP 500 오류인 경우에도 JSON을 반환하여 상세 오류 메시지 확인 가능하게 함
+            if response.status_code != 200:
+                # result에 이미 오류 정보가 있으므로 그대로 반환
+                # 또는 HTTP 상태 코드를 포함한 오류 메시지 추가
+                if "msg1" not in result or not result.get("msg1"):
+                    result["msg1"] = f"API 호출 실패: HTTP {response.status_code}"
+                
+                return result
+            
             # 주문 내역을 DB에 저장 (옵션)
             # save_order_history(request_body, result)
             return result
         except ValueError:
-            return {
-                "rt_cd": "1",
-                "msg_cd": "PARSEERR",
-                "msg1": "응답 파싱 오류",
-                "output": {}
-            }
+            # JSON 파싱 실패 시
+            if response.status_code != 200:
+                return {
+                    "rt_cd": "1",
+                    "msg_cd": f"HTTP_{response.status_code}",
+                    "msg1": f"API 호출 실패: HTTP {response.status_code}. 응답 파싱 불가: {response.text[:100]}",
+                    "output": {}
+                }
+            else:
+                return {
+                    "rt_cd": "1",
+                    "msg_cd": "PARSEERR",
+                    "msg1": "응답 파싱 오류",
+                    "output": {}
+                }
     except Exception as e:
         print(f"해외주식 주문 중 오류 발생: {str(e)}")
         import traceback

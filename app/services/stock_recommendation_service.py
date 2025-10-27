@@ -359,8 +359,22 @@ class StockRecommendationService:
         - 추가 조건: sentiment_score와 기술적 지표를 기반으로 매수 추천 필터링
         """
         try:
-            # 1. 기술적 지표 데이터 조회
-            tech_response = supabase.table("stock_recommendations").select("*").order("날짜", desc=True).execute()
+            # 1. 기술적 지표 데이터 조회 (재시도 로직 포함)
+            max_retries = 3
+            tech_response = None
+            for attempt in range(max_retries):
+                try:
+                    tech_response = supabase.table("stock_recommendations").select("*").order("날짜", desc=True).execute()
+                    break
+                except Exception as db_error:
+                    if attempt < max_retries - 1:
+                        import time
+                        wait_time = 2 * (attempt + 1)  # 2초, 4초, 6초
+                        print(f"데이터베이스 조회 실패 (시도 {attempt + 1}/{max_retries}): {str(db_error)}. {wait_time}초 후 재시도...")
+                        time.sleep(wait_time)
+                    else:
+                        raise Exception(f"데이터베이스 조회 최종 실패: {str(db_error)}")
+            
             if not tech_response.data:
                 return {"message": "기술적 지표 데이터가 없습니다", "results": []}
             
@@ -387,8 +401,22 @@ class StockRecommendationService:
             if not recommendations:
                 return {"message": "추천 주식이 없습니다", "results": []}
             
-            # 3. 감정 분석 데이터 조회
-            sentiment_response = supabase.table("ticker_sentiment_analysis").select("*").gte("average_sentiment_score", 0.15).execute()
+            # 3. 감정 분석 데이터 조회 (재시도 로직 포함)
+            sentiment_response = None
+            for attempt in range(max_retries):
+                try:
+                    sentiment_response = supabase.table("ticker_sentiment_analysis").select("*").gte("average_sentiment_score", 0.15).execute()
+                    break
+                except Exception as db_error:
+                    if attempt < max_retries - 1:
+                        wait_time = 2 * (attempt + 1)
+                        print(f"감정 분석 데이터 조회 실패 (시도 {attempt + 1}/{max_retries}): {str(db_error)}. {wait_time}초 후 재시도...")
+                        import time
+                        time.sleep(wait_time)
+                    else:
+                        print(f"감정 분석 데이터 조회 최종 실패: {str(db_error)}. 빈 데이터로 계속 진행합니다.")
+                        sentiment_response = type('obj', (object,), {'data': []})()  # 빈 응답 객체 생성
+                        break
             
             # 4. 데이터 매핑 준비
             tech_map = {row["종목"]: row.to_dict() for _, row in filtered_tech_df.iterrows()}
@@ -440,7 +468,7 @@ class StockRecommendationService:
                 tech_conditions = [item["golden_cross"], item["rsi"] < 50, item["macd_buy_signal"]]
                 
                 if sentiment_score is not None and sentiment_score >= 0.15:
-                    if sum(tech_conditions) >= 1:
+                    if sum(tech_conditions) >= 2:
                         final_results.append(item)
                 else:
                     if sum(tech_conditions) >= 3:
@@ -517,8 +545,23 @@ class StockRecommendationService:
                     ticker_to_korean[ticker] = name
                     korean_to_ticker[name] = ticker
             
-            # 3. 기술적 지표 데이터 가져오기
-            tech_response = supabase.table("stock_recommendations").select("*").order("날짜", desc=True).execute()
+            # 3. 기술적 지표 데이터 가져오기 (재시도 로직 포함)
+            max_retries = 3
+            tech_response = None
+            for attempt in range(max_retries):
+                try:
+                    tech_response = supabase.table("stock_recommendations").select("*").order("날짜", desc=True).execute()
+                    break
+                except Exception as db_error:
+                    if attempt < max_retries - 1:
+                        import time
+                        wait_time = 2 * (attempt + 1)
+                        print(f"기술적 지표 데이터 조회 실패 (시도 {attempt + 1}/{max_retries}): {str(db_error)}. {wait_time}초 후 재시도...")
+                        time.sleep(wait_time)
+                    else:
+                        print(f"기술적 지표 데이터 조회 최종 실패: {str(db_error)}")
+                        tech_response = type('obj', (object,), {'data': []})()  # 빈 응답 객체 생성
+                        break
             tech_data = pd.DataFrame(tech_response.data) if tech_response.data else pd.DataFrame()
             
             if not tech_data.empty:
@@ -531,8 +574,22 @@ class StockRecommendationService:
                 tech_data = tech_data.sort_values("날짜", ascending=False)
                 tech_data = tech_data.drop_duplicates(subset=["종목"], keep="first")
             
-            # 4. 감성 분석 데이터 가져오기
-            sentiment_response = supabase.table("ticker_sentiment_analysis").select("*").execute()
+            # 4. 감성 분석 데이터 가져오기 (재시도 로직 포함)
+            sentiment_response = None
+            for attempt in range(max_retries):
+                try:
+                    sentiment_response = supabase.table("ticker_sentiment_analysis").select("*").execute()
+                    break
+                except Exception as db_error:
+                    if attempt < max_retries - 1:
+                        wait_time = 2 * (attempt + 1)
+                        print(f"감성 분석 데이터 조회 실패 (시도 {attempt + 1}/{max_retries}): {str(db_error)}. {wait_time}초 후 재시도...")
+                        import time
+                        time.sleep(wait_time)
+                    else:
+                        print(f"감성 분석 데이터 조회 최종 실패: {str(db_error)}")
+                        sentiment_response = type('obj', (object,), {'data': []})()  # 빈 응답 객체 생성
+                        break
             sentiment_data = {item["ticker"]: item for item in sentiment_response.data} if sentiment_response.data else {}
             
             # 5. 매도 대상 종목 식별
